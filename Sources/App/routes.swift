@@ -6,9 +6,13 @@ func routes(_ app: Application) throws {
         try await req.view.render("index", ["title": "Hello Vapor!"])
     }
 
-    app.get("hello") { req async -> String in
-        "Hello, world!"
+    app.get("hello") { req in
+        return "in hello"
     }
-
+    
+    app.get("signup") {req in
+        UserManager.signUpLogic()
+    }
+	
     try app.register(collection: TodoController())
 }
