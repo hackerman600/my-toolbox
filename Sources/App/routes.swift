@@ -10,9 +10,9 @@ func routes(_ app: Application) throws {
         return "in hello"
     }
     
-    app.get("signup") {req in
-        UserManager.signUpLogic()
-    }
+    /*app.get("signup") {req in
+       UserManager.signUpLogic()
+    }*/
 	
     try app.register(collection: TodoController())
 }

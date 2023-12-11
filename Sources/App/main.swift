@@ -1,29 +1,15 @@
-
 import Vapor
 import NIOSSL
 
 let app = Application()
+try configure(app)
+
 let numbers = ["1","2","3","4","5","6","7","8","9","0"]
 let uppercase = ["A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z"]
 let lowercase = ["a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z"]
-let special = ["!","@","#","$","%","^","&","*","(",")"]
-let tlds = [".com", ".org", ".co", ".net", ".gov", ".info", ".biz"]
+//let special = ["!","@","#","$","%","^","&","*","(",")"]
+let tlds = ["com", "org", "co", "net", "gov", "info", "biz"]
 
-
-final class UserManager {
-    static func signUpLogic() -> String {
-        // Your logic for signup goes here
-        return "sign up"
-    }
-}
-
-
-struct YourData: Content {
-      let first: String
-      let last: String
-      let email: String
-      let password: String
-}
 
 func serversidenamecheck(name: String) -> Int {
     var myi = 0
@@ -33,7 +19,7 @@ func serversidenamecheck(name: String) -> Int {
        if uppercase.contains(String(chrs)) || lowercase.contains(String(chrs)) {
           myi += 1
        }
-    }	
+    }
 
     if myi == name.count {
        stat = 1
@@ -48,13 +34,17 @@ func serversidenamecheck(name: String) -> Int {
 
 
 func tldcheck(em: String) -> Int {
+    
     var myintchk = 0
-    for t in tlds {
-       if em.contains(String(t)){
-          myintchk += 1
-       }       
+
+    var domain = em.components(separatedBy: String("@"))[1]
+    var t = em.components(separatedBy: String("."))
+    if tlds.contains(String(t[1])){
+       myintchk += 1
     }
     
+    print("tld checking", t[0], " ", t[1])
+
     return myintchk
 
 }
@@ -72,7 +62,6 @@ func hostcheck(em: String, chr: Character) -> Int {
 
 
 func passwordcheck(pw: String) -> Int {
-    var spsh = 0
     var num = 0
     var low = 0 
     var up = 0
@@ -87,17 +76,13 @@ func passwordcheck(pw: String) -> Int {
           up += 1
        }
 
-       else if special.contains(String(p)) {
-          spsh += 1
-       }
-
        else if numbers.contains(String(p)) {
           num += 1
        }
 
     }
 
-    if spsh > 0 && num > 0 && low > 0 && up > 0 {
+    if num > 0 && low > 0 && up > 0 {
        ret = 1
     }
 
@@ -108,92 +93,90 @@ func passwordcheck(pw: String) -> Int {
     return ret
 }
 
-/*
-func signUpDatabaseReq() -> EventLoopFuture<String> {
 
-}*/
+struct YourData: Content {
+    let first: String
+    let last: String
+    let email: String
+    let password: String
+}
 
-
-func handleSignUpPostRequest(req: Request) throws -> EventLoopFuture<String> {
+func signupHandler(req: Request) throws -> EventLoopFuture<String> {
+ 
     let data = try req.content.decode(YourData.self)
-    print("first_name: \(data.first),  last_name: \(data.last), email: \(data.email), password: \(data.password)")
-    var myreturn : EventLoopFuture<String> = req.eventLoop.makeSucceededFuture("success")
-    let fnamecheck = serversidenamecheck(name: data.first)
-    let lnamecheck = serversidenamecheck(name: data.last)
-    let tldchkint = tldcheck(em: data.email)
-    let status = hostcheck(em: data.email, chr: "@")
-    let pwcheck = passwordcheck(pw: data.password)
+    print("email is: ", data.email)
+
+    let emailToCheck = String(data.email)
+    //let emailToCheck = "m@y.com" // Replace with the actual email to check
+
+    return signupmodel.query(on: req.db)
+        .filter(\.$email, .equal, emailToCheck)
+        .first()
+        .flatMap { existingUser in
+            if let myuserz = existingUser {
+                print("myuserz are: ", myuserz)
+                print("existing user is: ", existingUser)
+                // Email already exists, handle accordingly
+                return req.eventLoop.makeSucceededFuture("Email already exists")
+            } else {
+
+                let fnamecheck = serversidenamecheck(name: String(data.first))
+                let lnamecheck = serversidenamecheck(name: String(data.last))
+                let tldchkint = tldcheck(em: data.email)
+                let status = hostcheck(em: data.email, chr: "@")
+                let pwcheck = passwordcheck(pw: data.password)
+
+                // Email doesn't exist, proceed with signup logic
+                if data.first.count == 0 { 
+                  return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "first name was altered in transit, try again"))
+                }                
+
+                else if fnamecheck == 0 {
+                  return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "first name was altered in transit, try again"))
+                }
+
+                else if data.last.count == 0 {
+                  return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "last name was altered in transit, try again"))
+                }                
+
+                else if lnamecheck == 0 {
+                  return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "last name was altered in transit, try again"))
+                }
+
+                else if data.email.count == 0 {
+                  return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "email was altered in transit, try again"))
+                }
+
+                else if !data.email.contains("@") {
+                  return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "email was altered in transit, try again"))       
+                }
+
+                else if tldchkint == 0 {
+                  return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "email was altered in transit, try again"))       
+                }                
+
+		else if status != 1 {
+                  return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "email was altered in transit, try again"))       
+                }
+
+                else if pwcheck != 1 { 
+		  return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "passwork was altered in transit, try again"))
+		}
 
 
-    //let error = Abort(.badRequest, reason: "Last name changed in transit, resubmit signup form")
-    //return req.eventLoop.makeFailedFuture(error)
+                
+                let newUser = signupmodel(first: "myname", last: "mylast", email: emailToCheck, password: "mypass")
+                return newUser.save(on: req.db).map {                    
 
-    //server side validation
-    if data.first.count == 0 {
-      let error = Abort(.badRequest, reason: "first name changed in transit, resubmit signup form")
-      myreturn = req.eventLoop.makeFailedFuture(error)
-    }
-
-    else if fnamecheck == 0 {
-      let error = Abort(.badRequest, reason: "first name changed in transit, resubmit signup form")
-      myreturn = req.eventLoop.makeFailedFuture(error)
-    }
-
-    else if lnamecheck == 0 {
-      let error = Abort(.badRequest, reason: "last name changed in transit, resubmit signup form")
-      myreturn = req.eventLoop.makeFailedFuture(error)
-    }
-
-    else if data.last.count == 0 {
-      let error = Abort(.badRequest, reason: "last name changed in transit, resubmit signup form")
-      myreturn = req.eventLoop.makeFailedFuture(error)
-    }
-
-    else if data.email.count == 0 {
-      let error = Abort(.badRequest, reason: "email was changed in transit, resubmit signup form")
-      myreturn = req.eventLoop.makeFailedFuture(error)  
-    }
-
-    else if !data.email.contains("@") {
-      let error = Abort(.badRequest, reason: "email was changed in transit, resubmit signup form")
-      myreturn = req.eventLoop.makeFailedFuture(error)
-    }
-    
-    else if tldchkint != 1 {
-      let error = Abort(.badRequest, reason: "email was changed in transit, resubmit signup form")
-      myreturn = req.eventLoop.makeFailedFuture(error)
-    }
-    
-    else if status != 1 {
-      let error = Abort(.badRequest, reason: "email was changed in transit, resubmit signup form")
-      myreturn = req.eventLoop.makeFailedFuture(error)
-    }
-    
-    else if pwcheck != 1 {
-      let error = Abort(.badRequest, reason: "email was changed in transit, resubmit signup form")
-      myreturn = req.eventLoop.makeFailedFuture(error)
-    }
-
-    else {
-      myreturn = req.eventLoop.makeSucceededFuture("success")
-    } 
-
-    return myreturn
+                    return "User signed up successfully"
+                }
+            }
+        }
 }
 
-app.get { req in
-    return "Hello, Vapor"
+app.post("signup") {req -> EventLoopFuture<String> in
+    return try signupHandler(req: req)
 }
-
-app.get("hello") {req in 
-   return "in hello"
-}
-
-app.get("signup") {req in
-   UserManager.signUpLogic()
-}
-
-app.post("signup", use: handleSignUpPostRequest)
 
 // Use the provided certificate and private key paths
 let certPath = "/etc/letsencrypt/live/randaalhajali.com/fullchain.pem"
