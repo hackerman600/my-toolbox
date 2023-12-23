@@ -25,6 +25,7 @@ public func configure(_ app: Application) throws {
     app.views.use(.leaf)
 
     app.migrations.add(CreateSignupModel())    
+    //app.migrations.app(signupmodel)    
 
     // register routes
     try routes(app)

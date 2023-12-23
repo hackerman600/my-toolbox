@@ -1,7 +1,11 @@
+@preconcurrency
 import Vapor
 import NIOSSL
+import Fluent
+import FluentKit
 
 let app = Application()
+
 try configure(app)
 
 let numbers = ["1","2","3","4","5","6","7","8","9","0"]
@@ -9,6 +13,49 @@ let uppercase = ["A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P"
 let lowercase = ["a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z"]
 //let special = ["!","@","#","$","%","^","&","*","(",")"]
 let tlds = ["com", "org", "co", "net", "gov", "info", "biz"]
+
+
+struct MyData: Content {
+    let email: String
+    let password: String
+}
+
+
+struct MyEmail: Content {
+    let email: String
+}
+
+struct Myup: Content {
+    let email: String
+    let target: String
+    let type: String
+}
+
+func myforgothandler(req: Request) throws -> EventLoopFuture<String> {
+    
+      let data = try req.content.decode(MyEmail.self)
+
+      let EmailToCheck = data.email
+      
+      print("email received is: ", EmailToCheck)
+     
+      return signupmodel.query(on: req.db)
+        .filter(\.$email, .equal, EmailToCheck)
+        .first()
+        .flatMap { myf in
+            if let myf = myf {
+               //send email
+
+               return req.eventLoop.makeSucceededFuture("user exists")
+            }
+
+            else {
+               return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "email not found"))
+            }
+        }
+    
+    
+}
 
 
 func serversidenamecheck(name: String) -> Int {
@@ -101,6 +148,36 @@ struct YourData: Content {
     let password: String
 }
 
+
+func loginHandler(req: Request) throws -> EventLoopFuture<String> {
+    let data = try req.content.decode(MyData.self)
+    
+    let emailToCheck = String(data.email)
+    let passwdToCheck = String(data.password)    
+
+    print("emailToCheck = ", emailToCheck)
+    print("passwdToCheck = ", passwdToCheck)
+    //apply the same hash mechanisim to pw    
+
+    return signupmodel.query(on: req.db)
+        .filter(\.$email, .equal, emailToCheck)
+        .filter(\.$password, .equal, passwdToCheck)
+        .first()
+        .flatMap { user in 
+          if let user = user { 
+             let myretvalue = "\(user.first):\(user.last)$\(user.email)/\(user.password)"
+             return req.eventLoop.makeSucceededFuture(myretvalue)
+          } 
+          
+          else {
+             return req.eventLoop.makeSucceededFuture("")
+          }
+
+        }
+    
+}
+
+
 func signupHandler(req: Request) throws -> EventLoopFuture<String> {
  
     let data = try req.content.decode(YourData.self)
@@ -125,6 +202,15 @@ func signupHandler(req: Request) throws -> EventLoopFuture<String> {
                 let tldchkint = tldcheck(em: data.email)
                 let status = hostcheck(em: data.email, chr: "@")
                 let pwcheck = passwordcheck(pw: data.password)
+
+
+                print("fname is: ", fnamecheck)
+                print("lname is: ", lnamecheck)
+                print("tldchkint is: ", tldchkint)
+                print("status is: ", status)
+                print("pwcheck is: ", pwcheck)
+
+
 
                 // Email doesn't exist, proceed with signup logic
                 if data.first.count == 0 { 
@@ -155,28 +241,100 @@ func signupHandler(req: Request) throws -> EventLoopFuture<String> {
                   return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "email was altered in transit, try again"))       
                 }                
 
-		else if status != 1 {
+                else if status != 1 {
                   return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "email was altered in transit, try again"))       
                 }
 
                 else if pwcheck != 1 { 
-		  return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "passwork was altered in transit, try again"))
-		}
-
-
+                  return req.eventLoop.makeFailedFuture(Abort(.badRequest, reason: "passwork was altered in transit, try again"))
+                }
                 
-                let newUser = signupmodel(first: "myname", last: "mylast", email: emailToCheck, password: "mypass")
+                let newUser = signupmodel(first: data.first, last: data.last, email: emailToCheck, password: data.password)
                 return newUser.save(on: req.db).map {                    
-
-                    return "User signed up successfully"
+                  return "User signed up successfully"
                 }
             }
         }
 }
 
+
+func handlechangeprofile(req: Request) throws -> EventLoopFuture<String> {
+    let data = try req.content.decode(Myup.self)
+    let emailtocheck = data.email
+    let target = data.target
+    let type = data.type
+
+    print("email to check is \(emailtocheck)")
+    print("trget to check is \(target)")
+    print("type to check is \(type)")
+
+    return signupmodel.query(on: req.db)
+        .filter(\.$email, .equal, emailtocheck)
+        .first()
+        .flatMap { user in
+            if let user = user {
+                print("in if let user = user")
+
+                if type == "email" {
+                    user.email = target
+                }
+
+                if type == "password" {
+                    user.password = target
+                }
+
+                if type == "fname" {
+                    user.first = target
+                }
+
+                if type == "lname" {
+                    user.last = target
+                }
+
+                return user.update(on: req.db).map { _ in
+                    return "update successful"
+                }
+
+            }
+
+            else {
+                return req.eventLoop.makeSucceededFuture("update unsuccessful")
+            }
+
+        }
+}
+
+
+
+app.get("explore") {req -> String in 
+        return "explore"
+}
+
 app.post("signup") {req -> EventLoopFuture<String> in
     return try signupHandler(req: req)
 }
+
+app.post("login") {req -> EventLoopFuture<String> in 
+    return try loginHandler(req: req)
+}
+
+app.post("forgot") {req -> EventLoopFuture<String> in
+    return try myforgothandler(req: req)
+}
+
+/*app.post("changeprofile") {
+    print("change profile")
+}*/
+
+app.get("changeprofile") {req -> String in 
+    return "changeprofile"
+}
+
+
+app.post("changeprofile") {req -> EventLoopFuture<String> in 
+    return try handlechangeprofile(req: req)
+}
+
 
 // Use the provided certificate and private key paths
 let certPath = "/etc/letsencrypt/live/randaalhajali.com/fullchain.pem"

@@ -2,20 +2,18 @@
 import PackageDescription
 
 let package = Package(
-    name: "myvape",
+    name: "myvaporthrow",
     platforms: [
        .macOS(.v13)
     ],
     dependencies: [
         // 💧 A server-side Swift web framework.
-        .package(url: "https://github.com/vapor/vapor.git", from: "4.83.1"),
+        .package(url: "https://github.com/vapor/vapor.git", from: "4.89.0"),
         // 🗄 An ORM for SQL and NoSQL databases.
         .package(url: "https://github.com/vapor/fluent.git", from: "4.8.0"),
         // 🐬 Fluent driver for MySQL.
         .package(url: "https://github.com/vapor/fluent-mysql-driver.git", from: "4.0.0"),
-        // 🍃 An expressive, performant, and extensible templating language built for Swift.
-        .package(url: "https://github.com/vapor/leaf.git", from: "4.2.4"),
-        .package(url: "https://github.com/vapor/mysql-kit.git", from: "4.0.0")
+        .package(url: "https://github.com/vapor/leaf.git", from: "4.0.0"),
     ],
     targets: [
         .executableTarget(
@@ -23,9 +21,8 @@ let package = Package(
             dependencies: [
                 .product(name: "Fluent", package: "fluent"),
                 .product(name: "FluentMySQLDriver", package: "fluent-mysql-driver"),
-                .product(name: "Leaf", package: "leaf"),
                 .product(name: "Vapor", package: "vapor"),
-                .product(name: "MySQLKit", package: "mysql-kit")
+		.product(name: "Leaf", package: "leaf"),
             ]
         ),
         .testTarget(name: "AppTests", dependencies: [
@@ -36,7 +33,6 @@ let package = Package(
             .product(name: "Vapor", package: "vapor"),
             .product(name: "Fluent", package: "Fluent"),
             .product(name: "FluentMySQLDriver", package: "fluent-mysql-driver"),
-            .product(name: "Leaf", package: "leaf"),
         ])
     ]
 )
